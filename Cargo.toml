@@ -1,0 +1,15 @@
+[workspace]
+members = [
+    "common"
+]
+
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+
+[workspace.dependencies]
+tokio = { version = "1.37.0", default-features = false, features = ["rt", "rt-multi-thread", "macros"] }
+serde = { version = "1.0.199", default-features = false, features = ["derive"] }
+env_logger = { version = "0.11.3" }
+log = { version = "0.4.21" }
