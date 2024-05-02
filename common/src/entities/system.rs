@@ -1,8 +1,9 @@
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub enum Environment {
+    #[default]
     Production,
     Stage,
-    Development
+    Development,
 }
 
 impl std::str::FromStr for Environment {
@@ -13,9 +14,10 @@ impl std::str::FromStr for Environment {
             "PRODUCTION" => Ok(Self::Production),
             "STAGE" => Ok(Self::Stage),
             "DEVELOPMENT" => Ok(Self::Development),
-            _ => Err(
-                Self::Err::new(std::io::ErrorKind::NotFound, "environment not recognized")
-            )
+            _ => Err(Self::Err::new(
+                std::io::ErrorKind::NotFound,
+                "environment not recognized",
+            )),
         }
     }
 }
