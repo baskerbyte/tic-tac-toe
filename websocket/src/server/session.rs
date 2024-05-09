@@ -2,6 +2,7 @@ use tokio::sync::mpsc::error::SendError;
 
 use crate::json::{EventData, SocketRequest};
 
+#[derive(Debug)]
 pub struct Room {
     pub tray: [[char; 3]; 3],
     pub player1: PlayerSession,
@@ -44,10 +45,15 @@ impl Room {
     }
 
     pub fn is_full(&self) -> bool {
-        self.tray
-            .iter()
-            .flat_map(|row| row.iter())
-            .any(|&c| c == ' ')
+        for row in &self.tray {
+            for cell in row {
+                if cell == &' ' {
+                    return false;
+                }
+            }
+        }
+
+        true
     }
 
     pub fn is_win(&self) -> bool {

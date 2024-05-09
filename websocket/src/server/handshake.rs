@@ -13,7 +13,7 @@ pub fn accept_key_from(sec_ws_key: impl AsRef<[u8]>) -> String {
 
 pub fn response(
     sec_ws_key: impl AsRef<[u8]>,
-    headers: impl IntoIterator<Item = impl super::request::Header>,
+    headers: impl IntoIterator<Item=impl super::request::Header>,
 ) -> String {
     let key = accept_key_from(sec_ws_key);
     let headers: String = headers
@@ -21,14 +21,5 @@ pub fn response(
         .map(|f| super::request::Header::fmt(&f))
         .collect();
 
-    format!(
-        r#"
-        HTTP/1.1 101 
-        Switching Protocols
-        Upgrade: websocket
-        Connection: Upgrade
-        Sec-WebSocket-Accept: {key}
-        {headers}
-        "#
-    )
+    format!("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: {key}\r\n{headers}\r\n")
 }
