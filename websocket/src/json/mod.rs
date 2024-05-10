@@ -8,10 +8,8 @@ pub struct SocketRequest {
 #[serde(untagged)]
 pub enum EventData {
     // opcode: 10
-    HelloEvent { heartbeat_interval: u128 },
-    // opcode: 11
     Position { x: usize, y: usize },
-    // opcode: 12
+    // opcode: 11
     // 1 -> won of player 1; 2 -> won of player 2; 3 -> draw
     EndRoom { status: u8 },
 }

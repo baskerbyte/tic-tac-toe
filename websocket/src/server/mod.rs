@@ -71,8 +71,7 @@ impl App {
                         let mut ws_writer = WebSocket::server(writer);
                         let mut ws_reader = WebSocket::server(reader);
 
-                        let mut interval = tokio::time::interval(std::time::Duration::from_secs(45));
-                        session.send_hello(&interval);
+                        let mut interval = tokio::time::interval(std::time::Duration::from_secs(20));
 
                         loop {
                             tokio::select! {
@@ -85,17 +84,16 @@ impl App {
                                             };
 
                                             match event.d.clone().unwrap() {
-                                                crate::json::EventData::Position { .. } => {
+                                                EventData::Position { .. } => {
                                                     cmd_tx.send(Command::Reply { addr, event: event });
                                                 }
                                                 _ => {}
                                             }
                                         },
                                         web_socket::Event::Ping(_) => {
-                                            ws_writer.send_pong("p")
-                                                .await;
+                                            ws_writer.send_pong("p").await;
                                         },
-                                        web_socket::Event::Pong(_) => { session.refresh_hb(); },
+                                        web_socket::Event::Pong(_) => session.refresh_hb(),
                                         web_socket::Event::Error(_) | web_socket::Event::Close { .. } => {
                                             cmd_tx.send(Command::RemoveUser { addr });
 
@@ -110,7 +108,7 @@ impl App {
 
                                             break;
                                         }
-                                        9 => { ws_writer.send_ping("p"); }
+                                        9 => { ws_writer.send_ping("p").await; }
                                         _ => {
                                             ws_writer.send(serde_json::to_string(&event).unwrap().as_str()).await;
                                         }
@@ -142,24 +140,24 @@ impl App {
                                 room.player1.addr == addr || room.player2.as_ref().map_or(false, |session| session.addr == addr)
                             }) {
                                 match event.d {
-                                    Some(crate::json::EventData::Position { x, y }) => {
+                                    Some(EventData::Position { x, y }) => {
                                         let is_player1 = room.player1.addr == addr;
                                         room.mark_position(is_player1, (x, y));
 
                                         if is_player1 {
-                                            let request = SocketRequest { opcode: 11, d: Some(EventData::Position { x, y }) };
+                                            let request = SocketRequest { opcode: 10, d: Some(EventData::Position { x, y }) };
 
                                             room.player2.as_ref().unwrap().frame.send(request.clone());
                                         } else {
-                                            let request = SocketRequest { opcode: 11, d: Some(EventData::Position { x, y }) };
+                                            let request = SocketRequest { opcode: 10, d: Some(EventData::Position { x, y }) };
 
                                             room.player1.frame.send(request.clone());
                                         };
 
                                         let request = if room.is_win() {
-                                            SocketRequest { opcode: 12, d: Some(EventData::EndRoom { status: if is_player1 { 1 } else { 2 } }) }
+                                            SocketRequest { opcode: 11, d: Some(EventData::EndRoom { status: if is_player1 { 1 } else { 2 } }) }
                                         } else if room.is_full() {
-                                            SocketRequest { opcode: 12, d: Some(EventData::EndRoom { status: 3 }) }
+                                            SocketRequest { opcode: 11, d: Some(EventData::EndRoom { status: 3 }) }
                                         } else {
                                             continue;
                                         };

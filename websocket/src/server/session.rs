@@ -115,7 +115,7 @@ impl SocketSession {
     }
 
     pub fn heartbeat(&self) -> Result<(), SendError<SocketRequest>> {
-        if std::time::Instant::now().duration_since(self.hb) > std::time::Duration::new(10, 0) {
+        if std::time::Instant::now().duration_since(self.hb) > std::time::Duration::new(45, 0) {
             log::trace!("[{}] client heartbeat failed, disconnecting!", self.addr);
 
             // Send close event
@@ -128,18 +128,6 @@ impl SocketSession {
 
     pub fn refresh_hb(&mut self) {
         self.hb = std::time::Instant::now();
-    }
-
-    pub fn send_hello(
-        &self,
-        interval: &tokio::time::Interval,
-    ) -> Result<(), SendError<SocketRequest>> {
-        self.frame.send(SocketRequest {
-            opcode: 10,
-            d: Some(EventData::HelloEvent {
-                heartbeat_interval: interval.period().as_millis(),
-            }),
-        })
     }
 }
 
