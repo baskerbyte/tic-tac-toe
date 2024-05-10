@@ -1,10 +1,5 @@
 use std::env::var;
 
-#[derive(serde::Serialize, serde::Deserialize, Default)]
-pub struct WebSettings {
-    pub websocket: WebSocketSettings
-}
-
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct WebSocketSettings {
     pub host: String,

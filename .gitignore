@@ -182,3 +182,5 @@ package
 
 ### PNPM ###
 pnpm-lock.yaml
+
+application.toml

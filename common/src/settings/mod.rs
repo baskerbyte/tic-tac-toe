@@ -2,13 +2,11 @@ use std::str::FromStr;
 
 use crate::entities::system::Environment;
 
-pub mod cert;
 pub mod web;
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct AppSettings {
-    pub web: web::WebSettings,
-    pub certificates: cert::Certificates,
+    pub websocket: web::WebSocketSettings,
     #[serde(skip)]
     pub environment: Environment,
 }
@@ -47,8 +45,7 @@ impl AppSettings {
             toml::from_str(&std::fs::read_to_string(path).unwrap()).expect("Error reading file");
 
         Self {
-            web: partial.web,
-            certificates: partial.certificates,
+            websocket: partial.websocket,
             environment: env
         }
     }
@@ -60,14 +57,13 @@ impl AppSettings {
 
                 // Read configs from env or use default
                 Self {
-                    web: Default::default(),
-                    certificates: Default::default(),
+                    websocket: Default::default(),
                     environment: env,
                 }
             }
             Environment::Development => {
                 Self::write(path);
-                log::error!("Default configurations written to '{path:?}'. Please edit this file to continue.");
+                log::error!("Default configurations written to {path:?}. Please edit this file to continue.");
 
                 std::process::exit(1)
             }
