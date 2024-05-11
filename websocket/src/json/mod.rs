@@ -16,6 +16,7 @@ pub enum EventData {
     Identify { name: String },
     // opcode: 13
     Joined { name: String },
+    // Left Event = opcode: 14
 }
 
 pub enum Command {

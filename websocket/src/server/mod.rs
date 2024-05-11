@@ -127,11 +127,10 @@ impl App {
                     });
                 }
                 Some(cmd) = cmd_rx.recv() => {
+                    println!("{:?}", self.rooms);
                     match cmd {
                         Command::JoinUser { addr, name} => {
-                            if self.rooms.iter().any(|room| {
-                                room.player1.as_ref().map_or(false, |session| session.addr == addr) || room.player2.as_ref().map_or(false, |session| session.addr == addr)
-                            }) {
+                            if self.rooms.iter().any(|room| room.find_player(addr)) {
                                 continue;
                             }
 
@@ -140,30 +139,50 @@ impl App {
                                 player.name = Some(name.clone());
                                 
                                 if let Some(room) = self.rooms.iter_mut().find(|room| room.is_available()) {
-                                    room.player2 = Some(player);
-                                    
-                                    room.player2.as_ref().unwrap().frame.send(SocketRequest { opcode: 13, d: Some(EventData::Joined { name }) });
+                                    if room.player1.is_none() {
+                                        room.player1 = Some(player);
+
+                                        room.player2.as_ref().unwrap().frame.send(
+                                            SocketRequest { opcode: 13, d: Some(EventData::Joined { name }) }
+                                        );
+                                    } else {
+                                        room.player2 = Some(player);
+
+                                        room.player1.as_ref().unwrap().frame.send(
+                                            SocketRequest { opcode: 13, d: Some(EventData::Joined { name }) }
+                                        );
+                                    }
                                 } else {
                                     self.rooms.push(Room::new(Some(player), None))
                                 }
                             }
                         }
                         Command::RemoveUser { addr } => {
-                            if let Some(idx) = self.rooms.iter().position(|room| {
-                                room.player1.as_ref().map_or(false, |session| session.addr == addr) || room.player2.as_ref().map_or(false, |session| session.addr == addr)
-                            }) {
-                                self.rooms.remove(idx);
+                            if let Some(idx) = self.rooms.iter().position(|room| room.find_player(addr)) {
+                                let room = self.rooms.remove(idx);
+                                let player = if Room::is_player(&room.player1, addr) {
+                                    room.player2
+                                } else {
+                                    room.player1
+                                };
+
+                                if let Some(player) = player {
+                                    let name = player.name.as_ref().unwrap().to_string();
+
+                                    self.queue.push(player);
+                                    cmd_tx.send(Command::JoinUser { addr, name });
+                                }
                             }
                         },
                         //            Orign addr
                         Command::Reply { addr, event } => {
-                            if let Some(room) = self.rooms.iter_mut().find(|room| {
-                                room.player1.as_ref().map_or(false, |session| session.addr == addr) || room.player2.as_ref().map_or(false, |session| session.addr == addr)
-                            }) {
+                            if let Some(room) = self.rooms.iter_mut().find(|room| room.find_player(addr)) {
                                 match event.d {
                                     Some(EventData::Position { x, y }) => {
-                                        let is_player1 = room.player1.as_ref().unwrap().addr == addr;
-                                        room.mark_position(is_player1, (x, y));
+                                        let is_player1 = Room::is_player(&room.player1, addr);
+                                        if let Err(_) = room.mark_position(is_player1, (x, y)) {
+                                            continue;
+                                        }
 
                                         if is_player1 {
                                             let request = SocketRequest { opcode: 10, d: Some(EventData::Position { x, y }) };

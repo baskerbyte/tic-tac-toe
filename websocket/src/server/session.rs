@@ -2,7 +2,7 @@ use tokio::sync::mpsc::error::SendError;
 
 use crate::json::SocketRequest;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SocketSession {
     pub addr: std::net::SocketAddr,
     pub frame: tokio::sync::mpsc::UnboundedSender<SocketRequest>,

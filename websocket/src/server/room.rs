@@ -1,6 +1,8 @@
+use web_socket::Event;
 use crate::json::SocketRequest;
 use crate::server::session::SocketSession;
 
+#[derive(Debug)]
 pub struct Room {
     pub tray: [[char; 3]; 3],
     pub player1: Option<SocketSession>,
@@ -17,15 +19,29 @@ impl Room {
     }
 
     pub fn is_available(&self) -> bool {
-        self.player2.is_none()
+        self.player1.is_none() || self.player2.is_none()
     }
 
-    pub fn mark_position(&mut self, is_player1: bool, (x, y): (usize, usize)) {
+    pub fn find_player(&self, addr: std::net::SocketAddr) -> bool {
+        Self::is_player(&self.player1, addr) ||
+            Self::is_player(&self.player2, addr)
+    }
+
+    pub fn is_player(player: &Option<SocketSession>, addr: std::net::SocketAddr) -> bool {
+        player.as_ref().map_or(false, |session| session.addr == addr)
+    }
+
+    pub fn mark_position(
+        &mut self,
+        is_player1: bool, (x, y): (usize, usize)
+    ) -> Result<(), Event> {
         if self.tray[x][y] != ' ' {
-            return;
+            return Err(Event::Error("Posição já marcada"));
         }
 
         self.tray[x][y] = if is_player1 { 'X' } else { 'O' };
+
+        Ok(())
     }
 
     pub fn is_full(&self) -> bool {
@@ -61,9 +77,8 @@ impl Room {
     }
 
     pub fn reply_event(&self, event: SocketRequest) {
-        self.player1.frame.send(event.clone());
-
-        if let Some(player2) = &self.player2 {
+        if let (Some(player1), Some(player2)) = (&self.player1, &self.player2) {
+            player1.frame.send(event.clone());
             player2.frame.send(event);
         }
     }
