@@ -8,6 +8,7 @@ pub struct Room {
     pub tray: [[char; 3]; 3],
     pub player1: Option<SocketSession>,
     pub player2: Option<SocketSession>,
+    pub is_player1_last_mark: bool,
 }
 
 impl Room {
@@ -16,6 +17,7 @@ impl Room {
             tray: [[' '; 3]; 3],
             player1,
             player2,
+            is_player1_last_mark: false,
         }
     }
 
@@ -30,13 +32,23 @@ impl Room {
 
     pub fn mark_position(
         &mut self,
-        is_player1: bool, (x, y): (usize, usize),
+        is_player1: bool,
+        (x, y): (usize, usize),
     ) -> Result<(), Event> {
+        if x < 0 || x > 2 || y < 0 || y > 2 {
+            return Err(Event::Error("Posições inválidas"));
+        }
+
+        if self.is_player1_last_mark && is_player1 {
+            return Err(Event::Error("Essa não é a sua vez!"));
+        }
+
         if self.tray[x][y] != ' ' {
             return Err(Event::Error("Posição já marcada"));
         }
 
         self.tray[x][y] = if is_player1 { 'X' } else { 'O' };
+        self.is_player1_last_mark = is_player1;
 
         Ok(())
     }
