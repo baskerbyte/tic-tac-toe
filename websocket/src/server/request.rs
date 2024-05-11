@@ -18,9 +18,9 @@ pub fn get_sec_key(req: &HttpRequest) -> Option<&String> {
         .get("connection")?
         .eq_ignore_ascii_case("upgrade")
         || !req
-            .headers
-            .get("upgrade")?
-            .eq_ignore_ascii_case("websocket")
+        .headers
+        .get("upgrade")?
+        .eq_ignore_ascii_case("websocket")
     {
         return None;
     }
@@ -30,8 +30,8 @@ pub fn get_sec_key(req: &HttpRequest) -> Option<&String> {
 
 impl HttpRequest {
     pub async fn parse<IO>(reader: &mut IO) -> std::io::Result<Self>
-    where
-        IO: Unpin + tokio::io::AsyncBufRead,
+        where
+            IO: Unpin + tokio::io::AsyncBufRead,
     {
         let mut lines = reader.lines();
 
@@ -56,11 +56,13 @@ impl<T: Header> Header for &T {
         T::fmt(this)
     }
 }
+
 impl<T: std::fmt::Display> Header for [T; 2] {
     fn fmt([key, value]: &Self) -> String {
         format!("{key}: {value}\r\n")
     }
 }
+
 impl<K: std::fmt::Display, V: std::fmt::Display> Header for (K, V) {
     fn fmt((key, value): &Self) -> String {
         format!("{key}: {value}\r\n")

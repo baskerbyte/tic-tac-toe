@@ -7,6 +7,7 @@ use crate::{
     server::room::Room,
     server::session::SocketSession,
 };
+use crate::server::room::is_player;
 
 pub mod handshake;
 pub mod request;
@@ -127,7 +128,6 @@ impl App {
                     });
                 }
                 Some(cmd) = cmd_rx.recv() => {
-                    println!("{:?}", self.rooms);
                     match cmd {
                         Command::JoinUser { addr, name} => {
                             if self.rooms.iter().any(|room| room.find_player(addr)) {
@@ -160,39 +160,37 @@ impl App {
                         Command::RemoveUser { addr } => {
                             if let Some(idx) = self.rooms.iter().position(|room| room.find_player(addr)) {
                                 let room = self.rooms.remove(idx);
-                                let player = if Room::is_player(&room.player1, addr) {
+                                let player = if is_player(&room.player1, addr) {
                                     room.player2
                                 } else {
                                     room.player1
                                 };
 
                                 if let Some(player) = player {
-                                    let name = player.name.as_ref().unwrap().to_string();
-
+                                    // Left event
+                                    player.frame.send(SocketRequest { opcode: 14, d: None });
                                     self.queue.push(player);
-                                    cmd_tx.send(Command::JoinUser { addr, name });
                                 }
                             }
                         },
                         //            Orign addr
                         Command::Reply { addr, event } => {
-                            if let Some(room) = self.rooms.iter_mut().find(|room| room.find_player(addr)) {
+                            if let Some(idx) = self.rooms.iter_mut().position(|room| room.find_player(addr)) {
+                                let room = &mut self.rooms[idx];
                                 match event.d {
                                     Some(EventData::Position { x, y }) => {
-                                        let is_player1 = Room::is_player(&room.player1, addr);
+                                        let is_player1 = is_player(&room.player1, addr);
                                         if let Err(_) = room.mark_position(is_player1, (x, y)) {
                                             continue;
                                         }
 
-                                        if is_player1 {
-                                            let request = SocketRequest { opcode: 10, d: Some(EventData::Position { x, y }) };
-
-                                            room.player2.as_ref().unwrap().frame.send(request);
+                                        let player = if is_player1 {
+                                            room.player2.as_ref().unwrap()
                                         } else {
-                                            let request = SocketRequest { opcode: 10, d: Some(EventData::Position { x, y }) };
-
-                                            room.player1.as_ref().unwrap().frame.send(request);
+                                            room.player1.as_ref().unwrap()
                                         };
+                                        
+                                        player.frame.send(SocketRequest { opcode: 10, d: Some(EventData::Position { x, y }) });
 
                                         let request = if room.is_win() {
                                             SocketRequest { opcode: 11, d: Some(EventData::EndRoom { status: if is_player1 { 1 } else { 2 } }) }
@@ -203,7 +201,10 @@ impl App {
                                         };
 
                                         room.reply_event(request);
-                                        room.reset();
+                                        let room = self.rooms.remove(idx);
+                                        
+                                        self.queue.push(room.player1.unwrap());
+                                        self.queue.push(room.player2.unwrap());
                                     }
                                     Some(_) | None => {}
                                 };
