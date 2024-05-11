@@ -12,9 +12,17 @@ pub enum EventData {
     // opcode: 11
     // 1 -> won of player 1; 2 -> won of player 2; 3 -> draw
     EndRoom { status: u8 },
+    // opcode: 12
+    Identify { name: String },
+    // opcode: 13
+    Joined { name: String },
 }
 
 pub enum Command {
+    JoinUser {
+        addr: std::net::SocketAddr,
+        name: String,
+    },
     RemoveUser {
         addr: std::net::SocketAddr,
     },

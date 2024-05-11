@@ -1,18 +1,22 @@
-use common::settings::{AppSettings, Protocol};
 use web_socket::WebSocket;
+
+use common::settings::{AppSettings, Protocol};
 
 use crate::{
     json::{Command, EventData, SocketRequest},
-    server::session::{Room, SocketSession},
+    server::room::Room,
+    server::session::SocketSession,
 };
 
 pub mod handshake;
 pub mod request;
 pub mod session;
+mod room;
 
 pub struct App {
     pub settings: AppSettings,
     pub rooms: Vec<Room>,
+    pub queue: Vec<SocketSession>,
 }
 
 impl App {
@@ -20,6 +24,7 @@ impl App {
         Self {
             settings: AppSettings::new("application.toml"),
             rooms: Vec::new(),
+            queue: Vec::new(),
         }
     }
 
@@ -54,20 +59,13 @@ impl App {
                     tokio::io::AsyncWriteExt::write_all(&mut writer, res.as_bytes()).await?;
 
                     log::trace!("[{addr}] successfully connected");
-
+                    
                     // Channel to send events between sockets
                     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<SocketRequest>();
-                    let player_session = session::PlayerSession::new(addr.clone(), tx.clone());
-
-                    if let Some(room) = self.rooms.iter_mut().find(|room| room.is_available()) {
-                        room.player2 = Some(player_session)
-                    } else {
-                        self.rooms.push(Room::new(player_session, None))
-                    }
-
+                    let mut session: SocketSession = SocketSession::new(addr, tx);
+                    self.queue.push(session.clone());
+                    
                     tokio::spawn(async move {
-                        let mut session: SocketSession = SocketSession::new(addr, tx);
-
                         let mut ws_writer = WebSocket::server(writer);
                         let mut ws_reader = WebSocket::server(reader);
 
@@ -86,6 +84,9 @@ impl App {
                                             match event.d.clone().unwrap() {
                                                 EventData::Position { .. } => {
                                                     cmd_tx.send(Command::Reply { addr, event: event });
+                                                },
+                                                EventData::Identify { name } => {
+                                                    cmd_tx.send(Command::JoinUser { addr, name });
                                                 }
                                                 _ => {}
                                             }
@@ -127,9 +128,29 @@ impl App {
                 }
                 Some(cmd) = cmd_rx.recv() => {
                     match cmd {
+                        Command::JoinUser { addr, name} => {
+                            if self.rooms.iter().any(|room| {
+                                room.player1.as_ref().map_or(false, |session| session.addr == addr) || room.player2.as_ref().map_or(false, |session| session.addr == addr)
+                            }) {
+                                continue;
+                            }
+
+                            if let Some(idx) = self.queue.iter().position(|session| session.addr == addr) {
+                                let mut player = self.queue.remove(idx);
+                                player.name = Some(name.clone());
+                                
+                                if let Some(room) = self.rooms.iter_mut().find(|room| room.is_available()) {
+                                    room.player2 = Some(player);
+                                    
+                                    room.player2.as_ref().unwrap().frame.send(SocketRequest { opcode: 13, d: Some(EventData::Joined { name }) });
+                                } else {
+                                    self.rooms.push(Room::new(Some(player), None))
+                                }
+                            }
+                        }
                         Command::RemoveUser { addr } => {
                             if let Some(idx) = self.rooms.iter().position(|room| {
-                                room.player1.addr == addr || room.player2.as_ref().map_or(false, |session| session.addr == addr)
+                                room.player1.as_ref().map_or(false, |session| session.addr == addr) || room.player2.as_ref().map_or(false, |session| session.addr == addr)
                             }) {
                                 self.rooms.remove(idx);
                             }
@@ -137,21 +158,21 @@ impl App {
                         //            Orign addr
                         Command::Reply { addr, event } => {
                             if let Some(room) = self.rooms.iter_mut().find(|room| {
-                                room.player1.addr == addr || room.player2.as_ref().map_or(false, |session| session.addr == addr)
+                                room.player1.as_ref().map_or(false, |session| session.addr == addr) || room.player2.as_ref().map_or(false, |session| session.addr == addr)
                             }) {
                                 match event.d {
                                     Some(EventData::Position { x, y }) => {
-                                        let is_player1 = room.player1.addr == addr;
+                                        let is_player1 = room.player1.as_ref().unwrap().addr == addr;
                                         room.mark_position(is_player1, (x, y));
 
                                         if is_player1 {
                                             let request = SocketRequest { opcode: 10, d: Some(EventData::Position { x, y }) };
 
-                                            room.player2.as_ref().unwrap().frame.send(request.clone());
+                                            room.player2.as_ref().unwrap().frame.send(request);
                                         } else {
                                             let request = SocketRequest { opcode: 10, d: Some(EventData::Position { x, y }) };
 
-                                            room.player1.frame.send(request.clone());
+                                            room.player1.as_ref().unwrap().frame.send(request);
                                         };
 
                                         let request = if room.is_win() {
