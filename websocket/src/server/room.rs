@@ -10,7 +10,7 @@ pub struct Room {
     pub player1: Option<SocketSession>,
     pub player2: Option<SocketSession>,
     pub player1_turn: bool,
-    pub duration_turn: std::time::Instant,
+    pub duration_turn: Option<std::time::Instant>,
 }
 
 impl Room {
@@ -20,7 +20,7 @@ impl Room {
             player1,
             player2,
             player1_turn: true,
-            duration_turn: std::time::Instant::now()
+            duration_turn: None
         }
     }
 
@@ -88,7 +88,7 @@ impl Room {
     }
 
     pub fn refresh_turn(&mut self) {
-        self.duration_turn = std::time::Instant::now();
+        self.duration_turn = Some(std::time::Instant::now());
     }
 }
 

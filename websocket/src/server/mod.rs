@@ -137,6 +137,7 @@ impl App {
                 Some(cmd) = cmd_rx.recv() => {
                     match cmd {
                         Command::JoinUser { addr, name} => {
+                            println!("Usuário entrou {name}");
                             if self.rooms.iter().any(|room| room.find_player(addr)) {
                                 continue;
                             }
@@ -222,16 +223,16 @@ impl App {
                 }
                 _ = room_turn.tick() => {
                     for room in self.rooms.iter() {
-                        if std::time::Instant::now().duration_since(room.duration_turn) > std::time::Duration::new(30, 0) {
-                            let player = if room.player1_turn {
-                                &room.player1
-                            } else {
-                                &room.player2
-                            };
+                        if let Some(duration_turn) = room.duration_turn {
+                            if std::time::Instant::now().duration_since(duration_turn) > std::time::Duration::new(30, 0) {
+                                let player = if room.player1_turn {
+                                    &room.player1
+                                } else {
+                                    &room.player2
+                                };
 
-                            cmd_tx.send(Command::RemoveUser { addr: player.as_ref().unwrap().addr });
-
-                            break;
+                                player.as_ref().unwrap().frame.send(SocketRequest { opcode: 8, d: None });
+                            }
                         }
                     }
                 }
