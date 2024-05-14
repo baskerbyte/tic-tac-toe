@@ -40,6 +40,7 @@ impl App {
 
         loop {
             let cmd_tx = cmd_tx.clone();
+            let mut room_turn = tokio::time::interval(std::time::Duration::from_secs(15));
 
             tokio::select! {
                 Ok((stream, addr)) = listener.accept() => {
@@ -197,6 +198,7 @@ impl App {
                                         };
 
                                         player.frame.send(SocketRequest { opcode: 10, d: Some(EventData::Position { x, y }) });
+                                        room.refresh_turn();
 
                                         let request = if room.is_win() {
                                             SocketRequest { opcode: 11, d: Some(EventData::EndRoom { status: if is_player1 { 1 } else { 2 } }) }
@@ -215,6 +217,21 @@ impl App {
                                     Some(_) | None => {}
                                 };
                             }
+                        }
+                    }
+                }
+                _ = room_turn.tick() => {
+                    for room in self.rooms.iter() {
+                        if std::time::Instant::now().duration_since(room.duration_turn) > std::time::Duration::new(30, 0) {
+                            let player = if room.player1_turn {
+                                &room.player1
+                            } else {
+                                &room.player2
+                            };
+
+                            cmd_tx.send(Command::RemoveUser { addr: player.as_ref().unwrap().addr });
+
+                            break;
                         }
                     }
                 }

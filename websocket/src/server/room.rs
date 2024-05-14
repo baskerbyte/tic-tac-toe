@@ -1,3 +1,4 @@
+use tokio::sync::mpsc::error::SendError;
 use web_socket::Event;
 
 use crate::json::SocketRequest;
@@ -9,6 +10,7 @@ pub struct Room {
     pub player1: Option<SocketSession>,
     pub player2: Option<SocketSession>,
     pub player1_turn: bool,
+    pub duration_turn: std::time::Instant,
 }
 
 impl Room {
@@ -18,6 +20,7 @@ impl Room {
             player1,
             player2,
             player1_turn: true,
+            duration_turn: std::time::Instant::now()
         }
     }
 
@@ -82,6 +85,10 @@ impl Room {
             player1.frame.send(event.clone());
             player2.frame.send(event);
         }
+    }
+
+    pub fn refresh_turn(&mut self) {
+        self.duration_turn = std::time::Instant::now();
     }
 }
 
