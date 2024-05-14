@@ -1,5 +1,7 @@
 // https://github.com/nurmohammed840/websocket.rs/blob/main/examples/utils/handshake.rs
 
+use std::io::ErrorKind;
+
 use tokio::io::AsyncBufReadExt;
 
 pub struct HttpRequest {
@@ -18,9 +20,9 @@ pub fn get_sec_key(req: &HttpRequest) -> Option<&String> {
         .get("connection")?
         .eq_ignore_ascii_case("upgrade")
         || !req
-        .headers
-        .get("upgrade")?
-        .eq_ignore_ascii_case("websocket")
+            .headers
+            .get("upgrade")?
+            .eq_ignore_ascii_case("websocket")
     {
         return None;
     }
@@ -30,12 +32,15 @@ pub fn get_sec_key(req: &HttpRequest) -> Option<&String> {
 
 impl HttpRequest {
     pub async fn parse<IO>(reader: &mut IO) -> std::io::Result<Self>
-        where
-            IO: Unpin + tokio::io::AsyncBufRead,
+    where
+        IO: Unpin + tokio::io::AsyncBufRead,
     {
         let mut lines = reader.lines();
 
-        let prefix = lines.next_line().await?.unwrap();
+        let prefix = lines.next_line().await?.ok_or(std::io::Error::new(
+            ErrorKind::InvalidData,
+            "fail to get request type",
+        ))?;
         let mut headers = std::collections::HashMap::new();
 
         while let Some(line) = lines.next_line().await? {
@@ -43,7 +48,10 @@ impl HttpRequest {
                 break;
             }
 
-            let (key, value) = line.split_once(":").unwrap();
+            let (key, value) = line.split_once(":").ok_or(std::io::Error::new(
+                ErrorKind::InvalidData,
+                "fail to split lines",
+            ))?;
             headers.insert(key.to_ascii_lowercase(), value.trim_start().into());
         }
 

@@ -2,17 +2,17 @@ use web_socket::WebSocket;
 
 use common::settings::{AppSettings, Protocol};
 
+use crate::server::room::is_player;
 use crate::{
     json::{Command, EventData, SocketRequest},
     server::room::Room,
     server::session::SocketSession,
 };
-use crate::server::room::is_player;
 
 pub mod handshake;
 pub mod request;
-pub mod session;
 mod room;
+pub mod session;
 
 pub struct App {
     pub settings: AppSettings,
@@ -46,7 +46,13 @@ impl App {
                     let (reader, mut writer) = stream.into_split();
                     let mut reader = tokio::io::BufReader::new(reader);
 
-                    let req = request::HttpRequest::parse(&mut reader).await?;
+                    let req = match request::HttpRequest::parse(&mut reader).await {
+                        Ok(req) => req,
+                        Err(e) => {
+                            log::trace!("[{addr}] fail to parse request: {e}");
+                            continue;
+                        },
+                    };
 
                     let key = match request::get_sec_key(&req) {
                         Some(key) => key,
@@ -60,12 +66,12 @@ impl App {
                     tokio::io::AsyncWriteExt::write_all(&mut writer, res.as_bytes()).await?;
 
                     log::trace!("[{addr}] successfully connected");
-                    
+
                     // Channel to send events between sockets
                     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<SocketRequest>();
                     let mut session: SocketSession = SocketSession::new(addr, tx);
                     self.queue.push(session.clone());
-                    
+
                     tokio::spawn(async move {
                         let mut ws_writer = WebSocket::server(writer);
                         let mut ws_reader = WebSocket::server(reader);
@@ -82,11 +88,11 @@ impl App {
                                                 Err(_) => { continue; }
                                             };
 
-                                            match event.d.clone().unwrap() {
-                                                EventData::Position { .. } => {
+                                            match (event.opcode, event.d.clone().unwrap()) {
+                                                (10, EventData::Position { .. }) => {
                                                     cmd_tx.send(Command::Reply { addr, event: event });
                                                 },
-                                                EventData::Identify { name } => {
+                                                (12, EventData::Identify { name }) => {
                                                     cmd_tx.send(Command::JoinUser { addr, name });
                                                 }
                                                 _ => {}
@@ -137,7 +143,7 @@ impl App {
                             if let Some(idx) = self.queue.iter().position(|session| session.addr == addr) {
                                 let mut player = self.queue.remove(idx);
                                 player.name = Some(name.clone());
-                                
+
                                 if let Some(room) = self.rooms.iter_mut().find(|room| room.is_available()) {
                                     if room.player1.is_none() {
                                         room.player1 = Some(player);
@@ -189,7 +195,7 @@ impl App {
                                         } else {
                                             room.player1.as_ref().unwrap()
                                         };
-                                        
+
                                         player.frame.send(SocketRequest { opcode: 10, d: Some(EventData::Position { x, y }) });
 
                                         let request = if room.is_win() {
@@ -202,7 +208,7 @@ impl App {
 
                                         room.reply_event(request);
                                         let room = self.rooms.remove(idx);
-                                        
+
                                         self.queue.push(room.player1.unwrap());
                                         self.queue.push(room.player2.unwrap());
                                     }

@@ -8,7 +8,7 @@ pub struct Room {
     pub tray: [[char; 3]; 3],
     pub player1: Option<SocketSession>,
     pub player2: Option<SocketSession>,
-    pub is_player1_last_mark: bool,
+    pub player1_turn: bool,
 }
 
 impl Room {
@@ -17,7 +17,7 @@ impl Room {
             tray: [[' '; 3]; 3],
             player1,
             player2,
-            is_player1_last_mark: false,
+            player1_turn: true,
         }
     }
 
@@ -39,7 +39,7 @@ impl Room {
             return Err(Event::Error("Posições inválidas"));
         }
 
-        if self.is_player1_last_mark && is_player1 {
+        if self.player1_turn && !is_player1 {
             return Err(Event::Error("Essa não é a sua vez!"));
         }
 
@@ -48,7 +48,7 @@ impl Room {
         }
 
         self.tray[x][y] = if is_player1 { 'X' } else { 'O' };
-        self.is_player1_last_mark = is_player1;
+        self.player1_turn = !self.player1_turn;
 
         Ok(())
     }
