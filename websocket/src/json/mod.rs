@@ -16,7 +16,7 @@ pub enum EventData {
     Identify { name: String },
     // opcode: 13
     Joined { name: String },
-    // Left Event = opcode: 14
+    Message(String)
 }
 
 pub enum Command {
@@ -31,4 +31,13 @@ pub enum Command {
         addr: std::net::SocketAddr,
         event: SocketRequest,
     },
+}
+
+impl SocketRequest {
+    pub fn new(opcode: u32, d: Option<EventData>) -> Self {
+        Self {
+            opcode,
+            d,
+        }
+    }
 }

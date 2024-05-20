@@ -1,6 +1,5 @@
-use tokio::sync::mpsc::error::SendError;
-
 use crate::json::SocketRequest;
+use crate::server::send_message;
 
 #[derive(Clone, Debug)]
 pub struct SocketSession {
@@ -24,16 +23,18 @@ impl SocketSession {
         }
     }
 
-    pub fn heartbeat(&self) -> Result<(), SendError<SocketRequest>> {
+    pub fn heartbeat(&self) -> Result<(), SocketRequest> {
         if std::time::Instant::now().duration_since(self.hb) > std::time::Duration::new(45, 0) {
             log::trace!("[{}] client heartbeat failed, disconnecting!", self.addr);
 
             // Send close event
-            return Err(SendError(SocketRequest { opcode: 8, d: None }));
+            return Err(SocketRequest { opcode: 8, d: None });
         }
 
         // Send ping event
-        self.frame.send(SocketRequest { opcode: 9, d: None })
+        send_message(&self.frame, SocketRequest { opcode: 9, d: None });
+
+        Ok(())
     }
 
     pub fn refresh_hb(&mut self) {

@@ -1,7 +1,5 @@
-use tokio::sync::mpsc::error::SendError;
-use web_socket::Event;
-
-use crate::json::SocketRequest;
+use crate::json::{EventData, SocketRequest};
+use crate::server::send_message;
 use crate::server::session::SocketSession;
 
 #[derive(Debug)]
@@ -10,7 +8,7 @@ pub struct Room {
     pub player1: Option<SocketSession>,
     pub player2: Option<SocketSession>,
     pub player1_turn: bool,
-    pub duration_turn: Option<std::time::Instant>,
+    pub duration_turn: std::time::Instant,
 }
 
 impl Room {
@@ -20,7 +18,7 @@ impl Room {
             player1,
             player2,
             player1_turn: true,
-            duration_turn: None
+            duration_turn: std::time::Instant::now() + std::time::Duration::from_secs(8),
         }
     }
 
@@ -37,17 +35,17 @@ impl Room {
         &mut self,
         is_player1: bool,
         (x, y): (usize, usize),
-    ) -> Result<(), Event> {
+    ) -> Result<(), SocketRequest> {
         if x < 0 || x > 2 || y < 0 || y > 2 {
-            return Err(Event::Error("Posições inválidas"));
+            return Err(SocketRequest::new(1007, Some(EventData::Message("invalid position".to_string()))));
         }
 
         if self.player1_turn && !is_player1 {
-            return Err(Event::Error("Essa não é a sua vez!"));
+            return Err(SocketRequest::new(1007, Some(EventData::Message("not your turn".to_string()))));
         }
 
         if self.tray[x][y] != ' ' {
-            return Err(Event::Error("Posição já marcada"));
+            return Err(SocketRequest::new(1007, Some(EventData::Message("position already taken".to_string()))));
         }
 
         self.tray[x][y] = if is_player1 { 'X' } else { 'O' };
@@ -82,13 +80,30 @@ impl Room {
 
     pub fn reply_event(&self, event: SocketRequest) {
         if let (Some(player1), Some(player2)) = (&self.player1, &self.player2) {
-            player1.frame.send(event.clone());
-            player2.frame.send(event);
+            send_message(&player1.frame, event.clone());
+            send_message(&player2.frame, event);
         }
     }
 
     pub fn refresh_turn(&mut self) {
-        self.duration_turn = Some(std::time::Instant::now());
+        self.duration_turn = std::time::Instant::now();
+    }
+    
+    pub fn timer(&self) {
+        if std::time::Instant::now().duration_since(self.duration_turn) > std::time::Duration::new(30, 0) {
+            let player = if self.player1_turn {
+                &self.player1
+            } else {
+                &self.player2
+            };
+
+            log::trace!("[{}] disconnected due to inactivity", player.as_ref().unwrap().addr);
+
+            send_message(
+                &player.as_ref().unwrap().frame,
+                SocketRequest { opcode: 8, d: None }
+            );
+        }
     }
 }
 

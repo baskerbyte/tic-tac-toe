@@ -2,7 +2,6 @@ use web_socket::WebSocket;
 
 use common::settings::{AppSettings, Protocol};
 
-use crate::server::room::is_player;
 use crate::{
     json::{Command, EventData, SocketRequest},
     server::room::Room,
@@ -11,21 +10,27 @@ use crate::{
 
 pub mod handshake;
 pub mod request;
-mod room;
+pub mod room;
 pub mod session;
 
 pub struct App {
     pub settings: AppSettings,
     pub rooms: Vec<Room>,
     pub queue: Vec<SocketSession>,
+    pub cmd_tx: tokio::sync::mpsc::UnboundedSender<Command>,
+    pub cmd_rx: tokio::sync::mpsc::UnboundedReceiver<Command>,
 }
 
 impl App {
     pub fn new() -> Self {
+        let (cmd_tx, cmd_rx) = tokio::sync::mpsc::unbounded_channel::<Command>();
+
         Self {
             settings: AppSettings::new("application.toml"),
             rooms: Vec::new(),
             queue: Vec::new(),
+            cmd_tx,
+            cmd_rx,
         }
     }
 
@@ -36,35 +41,19 @@ impl App {
             self.settings.websocket.socket()
         );
 
-        let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::unbounded_channel::<Command>();
-
         loop {
-            let cmd_tx = cmd_tx.clone();
+            let cmd_tx = self.cmd_tx.clone();
             let mut room_turn = tokio::time::interval(std::time::Duration::from_secs(15));
 
             tokio::select! {
                 Ok((stream, addr)) = listener.accept() => {
                     let (reader, mut writer) = stream.into_split();
                     let mut reader = tokio::io::BufReader::new(reader);
-
-                    let req = match request::HttpRequest::parse(&mut reader).await {
-                        Ok(req) => req,
-                        Err(e) => {
-                            log::trace!("[{addr}] fail to parse request: {e}");
-                            continue;
-                        },
-                    };
-
-                    let key = match request::get_sec_key(&req) {
-                        Some(key) => key,
-                        None => {
-                            log::error!("[{addr}] failed to get websocket key");
-                            continue;
-                        }
-                    };
-
-                    let res = handshake::response(key, [("x-agent", "web-socket")]);
-                    tokio::io::AsyncWriteExt::write_all(&mut writer, res.as_bytes()).await?;
+                    
+                    if let Err(e) = handshake::send(&mut reader, &mut writer).await {
+                        log::error!("[{addr}] failed to handshake {e}");
+                        continue;
+                    }
 
                     log::trace!("[{addr}] successfully connected");
 
@@ -82,38 +71,22 @@ impl App {
                         loop {
                             tokio::select! {
                                 Ok(event) = ws_reader.recv() => {
-                                    match event {
-                                        web_socket::Event::Data { data, .. } => {
-                                            let event = match serde_json::from_slice::<SocketRequest>(&data) {
-                                                Ok(event) => event,
-                                                Err(_) => { continue; }
-                                            };
-
-                                            match (event.opcode, event.d.clone().unwrap()) {
-                                                (10, EventData::Position { .. }) => {
-                                                    cmd_tx.send(Command::Reply { addr, event: event });
-                                                },
-                                                (12, EventData::Identify { name }) => {
-                                                    cmd_tx.send(Command::JoinUser { addr, name });
-                                                }
-                                                _ => {}
-                                            }
-                                        },
-                                        web_socket::Event::Ping(_) => {
-                                            ws_writer.send_pong("p").await;
-                                        },
-                                        web_socket::Event::Pong(_) => session.refresh_hb(),
-                                        web_socket::Event::Error(_) | web_socket::Event::Close { .. } => {
-                                            cmd_tx.send(Command::RemoveUser { addr });
-
-                                            break;
-                                        },
+                                    if let Err(_) = crate::events::handle_client(
+                                        &mut session,
+                                        event,
+                                        &cmd_tx,
+                                        &mut ws_writer
+                                    ).await {
+                                        break;
                                     }
                                 },
                                 Some(event) = rx.recv() => {
                                     match event.opcode {
                                         8 => {
-                                            cmd_tx.send(Command::RemoveUser { addr });
+                                            send_message(
+                                                &cmd_tx,
+                                                Command::RemoveUser { addr }
+                                            );
 
                                             break;
                                         }
@@ -125,7 +98,10 @@ impl App {
                                 },
                                 _ = interval.tick() => {
                                     if let Err(_) = session.heartbeat() {
-                                        cmd_tx.send(Command::RemoveUser { addr });
+                                        send_message(
+                                            &cmd_tx,
+                                            Command::RemoveUser { addr }
+                                        );
 
                                         break;
                                     };
@@ -134,109 +110,20 @@ impl App {
                         }
                     });
                 }
-                Some(cmd) = cmd_rx.recv() => {
-                    match cmd {
-                        Command::JoinUser { addr, name} => {
-                            println!("Usuário entrou {name}");
-                            if self.rooms.iter().any(|room| room.find_player(addr)) {
-                                continue;
-                            }
-
-                            if let Some(idx) = self.queue.iter().position(|session| session.addr == addr) {
-                                let mut player = self.queue.remove(idx);
-                                player.name = Some(name.clone());
-
-                                if let Some(room) = self.rooms.iter_mut().find(|room| room.is_available()) {
-                                    if room.player1.is_none() {
-                                        room.player1 = Some(player);
-
-                                        room.player2.as_ref().unwrap().frame.send(
-                                            SocketRequest { opcode: 13, d: Some(EventData::Joined { name }) }
-                                        );
-                                    } else {
-                                        room.player2 = Some(player);
-
-                                        room.player1.as_ref().unwrap().frame.send(
-                                            SocketRequest { opcode: 13, d: Some(EventData::Joined { name }) }
-                                        );
-                                    }
-                                } else {
-                                    self.rooms.push(Room::new(Some(player), None))
-                                }
-                            }
-                        }
-                        Command::RemoveUser { addr } => {
-                            if let Some(idx) = self.rooms.iter().position(|room| room.find_player(addr)) {
-                                let room = self.rooms.remove(idx);
-                                let player = if is_player(&room.player1, addr) {
-                                    room.player2
-                                } else {
-                                    room.player1
-                                };
-
-                                if let Some(player) = player {
-                                    // Left event
-                                    player.frame.send(SocketRequest { opcode: 14, d: None });
-                                    self.queue.push(player);
-                                }
-                            }
-                        },
-                        //            Orign addr
-                        Command::Reply { addr, event } => {
-                            if let Some(idx) = self.rooms.iter_mut().position(|room| room.find_player(addr)) {
-                                let room = &mut self.rooms[idx];
-                                match event.d {
-                                    Some(EventData::Position { x, y }) => {
-                                        let is_player1 = is_player(&room.player1, addr);
-                                        if let Err(_) = room.mark_position(is_player1, (x, y)) {
-                                            continue;
-                                        }
-
-                                        let player = if is_player1 {
-                                            room.player2.as_ref().unwrap()
-                                        } else {
-                                            room.player1.as_ref().unwrap()
-                                        };
-
-                                        player.frame.send(SocketRequest { opcode: 10, d: Some(EventData::Position { x, y }) });
-                                        room.refresh_turn();
-
-                                        let request = if room.is_win() {
-                                            SocketRequest { opcode: 11, d: Some(EventData::EndRoom { status: if is_player1 { 1 } else { 2 } }) }
-                                        } else if room.is_full() {
-                                            SocketRequest { opcode: 11, d: Some(EventData::EndRoom { status: 3 }) }
-                                        } else {
-                                            continue;
-                                        };
-
-                                        room.reply_event(request);
-                                        let room = self.rooms.remove(idx);
-
-                                        self.queue.push(room.player1.unwrap());
-                                        self.queue.push(room.player2.unwrap());
-                                    }
-                                    Some(_) | None => {}
-                                };
-                            }
-                        }
-                    }
-                }
+                Some(cmd) = self.cmd_rx.recv() =>
+                    crate::events::handle_command(cmd, &mut self.rooms, &mut self.queue),
                 _ = room_turn.tick() => {
                     for room in self.rooms.iter() {
-                        if let Some(duration_turn) = room.duration_turn {
-                            if std::time::Instant::now().duration_since(duration_turn) > std::time::Duration::new(30, 0) {
-                                let player = if room.player1_turn {
-                                    &room.player1
-                                } else {
-                                    &room.player2
-                                };
-
-                                player.as_ref().unwrap().frame.send(SocketRequest { opcode: 8, d: None });
-                            }
-                        }
+                        room.timer()
                     }
                 }
             }
         }
+    }
+}
+
+pub fn send_message<T>(frame: &tokio::sync::mpsc::UnboundedSender<T>, data: T) {
+    if let Err(_) = frame.send(data) {
+        log::error!("failed to send frame message");
     }
 }
