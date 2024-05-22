@@ -5,6 +5,7 @@
 
     let playerName = '';
     let opponentName = '';
+    let my_turn: boolean | null = null;
     let isFormSubmitted = false;
     let socket: WebSocket | null = null;
 
@@ -21,6 +22,7 @@
             const data = JSON.parse(event.data);
             if (data.opcode == 13) {
                 opponentName = data.d.name;
+                my_turn = data.d.id != 0;
             }
         });
 
@@ -52,7 +54,7 @@
     <h1>Tic Tac Toe</h1>
     {#if playerName && isFormSubmitted && socket}
         {#if opponentName}
-            <Board socket={socket}/>
+            <Board socket={socket} my_turn={my_turn}/>
         {:else}
             <p>Finding a match</p>
         {/if}

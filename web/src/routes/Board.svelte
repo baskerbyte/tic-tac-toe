@@ -2,29 +2,47 @@
     let squares = Array(9).fill(null);
     export let socket: WebSocket;
 
-    function handleSquareClick(index: number) {
-        if (!squares[index]) {
-            squares[index] = 'X';
+    export let my_turn: boolean;
+    let error_message = '';
 
-            socket.send(JSON.stringify({
-                opcode: 10,
-                d: { x: Math.floor(index / 3), y: index % 3 }
-            }))
+    function handleSquareClick(index: number) {
+        if (!my_turn) {
+            error_message = "Not your turn";
+            return;
         }
+
+        if (squares[index]) {
+            error_message = "Position already taken";
+            return;
+        }
+
+        socket.send(JSON.stringify({
+            opcode: 10,
+            d: {x: Math.floor(index / 3), y: index % 3}
+        }));
+
+        squares[index] = 'X';
+        my_turn = !my_turn;
     }
 
-    import { onMount } from "svelte";
+    import {onMount} from "svelte";
+
     onMount(() => {
         socket.addEventListener('message', handleMessageFromServer);
+
+        setTimeout(function () {
+            error_message = '';
+        }, 10000)
     });
 
     function handleMessageFromServer(event: MessageEvent) {
         const data = JSON.parse(event.data);
 
-        if (data.opcode === 10) {
-            let { x, y } = data.d;
+        if (data.opcode == 10) {
+            let {x, y} = data.d;
 
             squares[y + x * 3] = 'O';
+            my_turn = !my_turn;
         }
     }
 </script>
@@ -49,4 +67,8 @@
             {/if}
         </button>
     {/each}
+
+    {#if error_message !== ''}
+        <p>{error_message}</p>
+    {/if}
 </div>

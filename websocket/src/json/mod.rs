@@ -15,7 +15,7 @@ pub enum EventData {
     // opcode: 12
     Identify { name: String },
     // opcode: 13
-    Joined { name: String },
+    Joined { id: u8, name: String },
     Message(String)
 }
 

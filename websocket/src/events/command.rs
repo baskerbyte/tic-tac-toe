@@ -34,14 +34,18 @@ pub fn join(
             };
 
             if let (Some(other), Some(current)) = (room.player1.as_ref(), room.player2.as_ref()) {
+                let id = if is_player(&room.player1, addr) { 0 } else { 1 };
+
                 send_message(
                     &other.frame,
-                    SocketRequest::new(13, Some(EventData::Joined { name: current.name.as_ref().unwrap().to_string() })),
+                    SocketRequest::new(13, Some(EventData::Joined { id, name: current.name.as_ref().unwrap().to_string() })),
                 );
+
+                let id = if id == 0 { 1 } else { 0 };
 
                 send_message(
                     &current.frame,
-                    SocketRequest::new(13, Some(EventData::Joined { name: other.name.as_ref().unwrap().to_string() })),
+                    SocketRequest::new(13, Some(EventData::Joined { id, name: other.name.as_ref().unwrap().to_string() })),
                 );
             }
         } else {
