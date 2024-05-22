@@ -114,7 +114,9 @@ impl App {
                     crate::events::handle_command(cmd, &mut self.rooms, &mut self.queue),
                 _ = room_turn.tick() => {
                     for room in self.rooms.iter() {
-                        room.timer()
+                        if room.player1.is_some() && room.player2.is_some() {
+                            room.timer()
+                        }
                     }
                 }
             }

@@ -40,7 +40,7 @@ impl Room {
             return Err(SocketRequest::new(1007, Some(EventData::Message("invalid position".to_string()))));
         }
 
-        if self.player1_turn && !is_player1 {
+        if self.player1_turn && !is_player1 || !self.player1_turn && is_player1 {
             return Err(SocketRequest::new(1007, Some(EventData::Message("not your turn".to_string()))));
         }
 
@@ -49,7 +49,6 @@ impl Room {
         }
 
         self.tray[x][y] = if is_player1 { 'X' } else { 'O' };
-        self.player1_turn = !self.player1_turn;
 
         Ok(())
     }
@@ -87,6 +86,7 @@ impl Room {
 
     pub fn refresh_turn(&mut self) {
         self.duration_turn = std::time::Instant::now();
+        self.player1_turn = !self.player1_turn;
     }
     
     pub fn timer(&self) {

@@ -1,10 +1,10 @@
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct SocketRequest {
     pub opcode: u32,
     pub d: Option<EventData>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 #[serde(untagged)]
 pub enum EventData {
     // opcode: 10

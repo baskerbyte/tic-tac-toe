@@ -96,7 +96,7 @@ pub fn reply_position(
                     e,
                 );
             }
-            
+
             return;
         }
 
@@ -111,6 +111,7 @@ pub fn reply_position(
             SocketRequest { opcode: 10, d: Some(EventData::Position { x, y }) },
         );
         room.refresh_turn();
+        log::trace!("[{addr}] received mark in ({x}, {y})");
 
         let request = if room.is_win() {
             SocketRequest { opcode: 11, d: Some(EventData::EndRoom { status: if is_player1 { 1 } else { 2 } }) }
