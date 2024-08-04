@@ -3,7 +3,7 @@ use web_socket::WebSocket;
 use common::settings::{AppSettings, Protocol};
 
 use crate::{
-    json::{Command, EventData, SocketRequest},
+    json::{Command, SocketRequest},
     server::room::Room,
     server::session::SocketSession,
 };
@@ -42,6 +42,7 @@ impl App {
         );
 
         loop {
+            // Channel to modify Vecs without parallelism
             let cmd_tx = self.cmd_tx.clone();
             let mut room_turn = tokio::time::interval(std::time::Duration::from_secs(15));
 
@@ -49,7 +50,7 @@ impl App {
                 Ok((stream, addr)) = listener.accept() => {
                     let (reader, mut writer) = stream.into_split();
                     let mut reader = tokio::io::BufReader::new(reader);
-                    
+
                     if let Err(e) = handshake::send(&mut reader, &mut writer).await {
                         log::error!("[{addr}] failed to handshake {e}");
                         continue;
@@ -71,7 +72,7 @@ impl App {
                         loop {
                             tokio::select! {
                                 Ok(event) = ws_reader.recv() => {
-                                    if let Err(_) = crate::events::handle_client(
+                                    if let Err(_) = session::handle_client(
                                         &mut session,
                                         event,
                                         &cmd_tx,
@@ -111,7 +112,7 @@ impl App {
                     });
                 }
                 Some(cmd) = self.cmd_rx.recv() =>
-                    crate::events::handle_command(cmd, &mut self.rooms, &mut self.queue),
+                    crate::commands::handle(cmd, &mut self.rooms, &mut self.queue),
                 _ = room_turn.tick() => {
                     for room in self.rooms.iter() {
                         if room.player1.is_some() && room.player2.is_some() {

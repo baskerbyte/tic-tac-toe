@@ -1,4 +1,4 @@
-use crate::json::SocketRequest;
+use crate::json::{Command, SocketRequest};
 use crate::server::send_message;
 
 #[derive(Clone, Debug)]
@@ -40,4 +40,28 @@ impl SocketSession {
     pub fn refresh_hb(&mut self) {
         self.hb = std::time::Instant::now();
     }
+}
+
+pub async fn handle_client(
+    session: &mut SocketSession,
+    event: web_socket::Event,
+    cmd_tx: &tokio::sync::mpsc::UnboundedSender<Command>,
+    ws_writer: &mut web_socket::WebSocket<tokio::net::tcp::OwnedWriteHalf>,
+) -> Result<(), ()> {
+    match event {
+        web_socket::Event::Data { data, .. } => {
+            crate::events::handle(session, data, cmd_tx).await;
+        }
+        web_socket::Event::Ping(_) => {
+            ws_writer.send_pong("p").await;
+        }
+        web_socket::Event::Pong(_) => session.refresh_hb(),
+        web_socket::Event::Error(_) | web_socket::Event::Close { .. } => {
+            send_message(&cmd_tx, Command::RemoveUser { addr: session.addr });
+
+            return Err(());
+        }
+    }
+
+    Ok(())
 }

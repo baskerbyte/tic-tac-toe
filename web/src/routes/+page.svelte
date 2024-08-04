@@ -1,119 +1,100 @@
 <script lang="ts">
-    import {onMount} from "svelte";
-    import Board from './Board.svelte';
-    import type {EventHandler} from "svelte/elements";
+    import { onMount } from "svelte";
+    import Board from "$lib/Board.svelte";
 
-    let playerName = '';
-    let opponentName = '';
-    let opponentLeft: boolean | null = null;
-    let id: number | null = null;
-    let my_turn: boolean | null = null;
-    let isFormSubmitted = false;
-    let socket: WebSocket | null = null;
-    let match_result: number | null;
+    let ws: WebSocket | null = null;
+
+    let player_name: string | null = "Luis";
+    let room_joined = false;
+    let rooms: any[] = [];
 
     onMount(() => {
-        connect()
+        ws = new WebSocket(
+            "wss://silver-enigma-x96r5pjpx9qh6px5-9002.app.github.dev/",
+        );
+
+        ws.addEventListener("message", function (event) {
+            let data = JSON.parse(event.data);
+            console.log(data);
+
+            switch (data.opcode) {
+                case 17:
+                    rooms = data.d.parties;
+                    break;
+                case 18:
+                    rooms = rooms.concat([data.d]);
+                    break;
+            }
+        });
+
+        ws.onopen = function () {
+            getRooms();
+        };
     });
 
-    function connect() {
-        socket = new WebSocket("ws://localhost:9002");
-
-        socket.addEventListener('open', () => {
-            if (playerName) {
-                playAgain();
-            }
-        });
-
-        socket.addEventListener('message', (event) => {
-            console.log('Message from server:', event);
-
-            const data = JSON.parse(event.data);
-            if (data.opcode == 13) {
-                opponentName = data.d.name;
-                my_turn = data.d.id != 0;
-                if (data.d.id == 0) {
-                    id = 1;
-                } else {
-                    id = 0;
-                }
-            } else if (data.opcode == 11) {
-                match_result = data.d.status;
-                isFormSubmitted = false;
-            } else if (data.opcode == 14) {
-                opponentName = '';
-                isFormSubmitted = false;
-                opponentLeft = true;
-            }
-        });
-
-        socket.addEventListener('close', () => {
-            socket = null;
-            opponentName = '';
-        });
-
-        socket.addEventListener('error', () => {
-            console.error('WebSocket error');
-        });
+    function getRooms() {
+        ws?.send(
+            JSON.stringify({
+                opcode: 17,
+                d: null,
+            }),
+        );
     }
 
-    const handleSubmit: EventHandler<Event, HTMLFormElement> = async (event) => {
-        event.preventDefault();
-
-        if (socket) {
-            isFormSubmitted = true;
-            socket.send(JSON.stringify({
+    function joinRoom(id: number) {
+        ws?.send(
+            JSON.stringify({
                 opcode: 12,
                 d: {
-                    name: playerName
-                }
-            }))
-        }
+                    player_name,
+                    room_id: id,
+                    room_code: null,
+                },
+            }),
+        );
+
+        room_joined = true;
     }
 
-    function playAgain() {
-        opponentName = '';
-
-        id = null;
-        my_turn = null;
-
-        if (socket) {
-            isFormSubmitted = true;
-            socket.send(JSON.stringify({
-                opcode: 12,
+    function createRoom() {
+        ws?.send(
+            JSON.stringify({
+                opcode: 15,
                 d: {
-                    name: playerName
-                }
-            }))
-        }
+                    player_name,
+                    public: true,
+                },
+            }),
+        );
+
+        room_joined = true;
     }
+
+    const onLeave = () => {
+        getRooms();
+        room_joined = false;
+    };
 </script>
 
 <main>
-    <h1>Tic Tac Toe</h1>
-    {#if playerName && isFormSubmitted && socket}
-        {#if opponentName}
-            <Board socket={socket} my_turn={my_turn}/>
-        {:else}
-            <p>Finding a match</p>
-        {/if}
-    {:else}
-        {#if !socket}
-            <button on:click={connect}>Reconnect</button>
-        {:else if match_result}
-            <p>{match_result === 1 ? (id === 0 ? "You won" : `${opponentName} won`) : "Tie!"}</p>
+    <h1>Tic-tac-toe</h1>
 
-            <button on:click={playAgain}>Play Again</button>
-        {:else}
-            {#if opponentLeft}
-                <p>Opponent left the match</p>
-                <button on:click={playAgain}>Play Again</button>
-            {:else}
-                <form on:submit|preventDefault={handleSubmit}>
-                    <input type="text" bind:value={playerName} placeholder="Enter your name"/>
-                    <button type="submit">Find Match</button>
-                </form>
-            {/if}
-        {/if}
+    {#if !ws}
+        Connecting...
+    {:else if room_joined}
+        <Board {ws} {player_name} {onLeave}></Board>
+    {:else if rooms != undefined && rooms.length > 0}
+        <h2>Active rooms</h2>
+
+        {#each rooms as room}
+            <p>{room.player_name}'s room</p>
+            <button on:click={() => joinRoom(room.id)}>Join</button>
+        {/each}
+        
+        <button on:click={() => createRoom()}>Create your room</button>
+    {:else}
+        <p>There is no active room</p>
+
+        <button on:click={() => createRoom()}>Create your room</button>
     {/if}
 </main>

@@ -15,4 +15,5 @@ log = { workspace = true }
 serde_json = { version = "1.0.117" }
 web-socket = { version = "0.7.0" }
 base64 = { version = "0.22.1" }
+rand = { version = "0.8.5" }
 sha1 = { version = "0.10.1" }
