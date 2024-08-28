@@ -11,6 +11,10 @@ pub fn join(
     rooms: &mut Vec<Room>,
     queue: &mut Vec<SocketSession>,
 ) {
+    if !player_name.chars().all(char::is_alphanumeric) || player_name.len() > 10 {
+        return;
+    };
+
     let mut session = get_session(addr, queue).unwrap();
 
     if session.name.is_none() || session.name.as_ref() != Some(&player_name) {
@@ -24,18 +28,21 @@ pub fn join(
     }
 
     join_room(addr, session, room);
+
+    super::notify_connections(
+        SocketRequest::new(13, Some(EventData::Joined { id: room_id, name: None })),
+        queue,
+    )
 }
 
 pub fn remove(addr: std::net::SocketAddr, rooms: &mut Vec<Room>, queue: &mut Vec<SocketSession>) {
     if let Some(idx) = rooms.iter().position(|room| room.find_player(addr)) {
         let room = &mut rooms[idx];
         let player = if crate::server::room::is_player(&room.player1, addr) {
-            queue.push(room.player1.clone().unwrap());
             room.player1 = None;
 
             &room.player2
         } else {
-            queue.push(room.player2.clone().unwrap());
             room.player2 = None;
 
             &room.player1
@@ -50,10 +57,17 @@ pub fn remove(addr: std::net::SocketAddr, rooms: &mut Vec<Room>, queue: &mut Vec
                     d: None,
                 },
             );
-        }
+        };
+
+        super::notify_connections(
+            SocketRequest::new(20, Some(EventData::Left { id: idx as u8 })),
+            queue,
+        )
     } else if let Some(idx) = queue.iter().position(|session| session.addr == addr) {
         queue.remove(idx);
     }
+
+    log::trace!("{addr} disconnected");
 }
 
 pub fn get_session(
@@ -104,8 +118,7 @@ pub fn notify_joined(
                 id: is_player1 as u8,
                 name: joined_player
                     .name
-                    .clone()
-                    .unwrap_or_else(|| "Anonymous".into()),
+                    .clone(),
             }),
         ),
     );
@@ -118,8 +131,7 @@ pub fn notify_joined(
                 id: !is_player1 as u8,
                 name: other_player
                     .name
-                    .clone()
-                    .unwrap_or_else(|| "Anonymous".into()),
+                    .clone(),
             }),
         ),
     );

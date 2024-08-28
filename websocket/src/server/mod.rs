@@ -114,9 +114,16 @@ impl App {
                 Some(cmd) = self.cmd_rx.recv() =>
                     crate::commands::handle(cmd, &mut self.rooms, &mut self.queue),
                 _ = room_turn.tick() => {
-                    for room in self.rooms.iter() {
+                    for (id, room) in self.rooms.iter().enumerate() {
                         if room.player1.is_some() && room.player2.is_some() {
                             room.timer()
+                        }
+
+                        if room.player1.is_none() && room.player2.is_none() {
+                            crate::commands::notify_connections(
+                                SocketRequest::new(19, Some(crate::json::EventData::RoomDeleted { id })),
+                                &mut self.queue,
+                            );
                         }
                     }
                 }
@@ -125,7 +132,7 @@ impl App {
     }
 }
 
-pub fn send_message<T>(frame: &tokio::sync::mpsc::UnboundedSender<T>, data: T) {
+pub fn send_message<T : std::fmt::Debug>(frame: &tokio::sync::mpsc::UnboundedSender<T>, data: T) {
     if let Err(_) = frame.send(data) {
         log::error!("failed to send frame message");
     }

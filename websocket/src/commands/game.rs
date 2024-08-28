@@ -77,6 +77,7 @@ pub fn play_again(
     let room = &mut rooms[idx];
     room.duration_turn = Some(std::time::Instant::now());
     room.player1_turn = !room.player1_turn;
+    room.tray = [' '; 9];
 
     super::users::notify_joined(false, room.player1.as_ref().unwrap(), room.player2.as_ref());
     super::users::notify_joined(true, room.player2.as_ref().unwrap(), room.player1.as_ref());

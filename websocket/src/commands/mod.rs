@@ -35,11 +35,12 @@ pub fn handle(
         Command::DeleteRoom { addr, id } => rooms::delete(addr, id, rooms, queue),
         Command::ListRooms { addr } => rooms::list(addr, rooms, queue),
         Command::PlayAgain { addr } => game::play_again(addr, rooms),
+        Command::LeaveRoom { addr } => rooms::leave(addr, rooms, queue),
         _ => {}
     }
 }
 
-fn notify_connections(
+pub fn notify_connections(
     event: crate::json::SocketRequest,
     queue: &mut Vec<crate::server::session::SocketSession>,
 ) {

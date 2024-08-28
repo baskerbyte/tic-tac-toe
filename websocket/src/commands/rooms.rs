@@ -48,9 +48,47 @@ pub fn create(
     )
 }
 
+pub fn leave(
+    addr: std::net::SocketAddr,
+    rooms: &mut Vec<Room>,
+    queue: &mut Vec<SocketSession>,
+) {
+    if let Some(idx) = rooms.iter_mut().position(|room| room.find_player(addr)) {
+        let room = &mut rooms[idx];
+
+        let player = if crate::server::room::is_player(&room.player1, addr) {
+            queue.push(room.player1.as_ref().unwrap().clone());
+            room.player1 = None;
+            
+            &room.player2
+        } else {
+            queue.push(room.player2.as_ref().unwrap().clone());
+            room.player2 = None;
+
+            &room.player1
+        };
+
+        if let Some(player) = player {
+            // Left event
+            send_message(
+                &player.frame,
+                SocketRequest {
+                    opcode: 14,
+                    d: None,
+                },
+            );
+        };
+
+        super::notify_connections(
+            SocketRequest::new(20, Some(EventData::Left { id: idx as u8 })),
+            queue,
+        )
+    }
+}
+
 pub fn delete(
     addr: std::net::SocketAddr,
-    id: u8,
+    id: usize,
     rooms: &mut Vec<Room>,
     queue: &mut Vec<SocketSession>,
 ) {
@@ -77,7 +115,7 @@ pub fn delete(
     }
 
     super::notify_connections(
-        SocketRequest::new(18, Some(EventData::RoomDeleted { id })),
+        SocketRequest::new(19, Some(EventData::RoomDeleted { id })),
         queue,
     )
 }

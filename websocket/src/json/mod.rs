@@ -25,7 +25,7 @@ pub enum EventData {
     // opcode: 13
     Joined {
         id: u8,
-        name: String,
+        name: Option<String>,
     },
     // Left -> opcode: 14
     // opcode: 15
@@ -50,12 +50,11 @@ pub enum EventData {
     },
     // opcode: 19
     RoomDeleted {
-        id: u8,
+        id: usize,
     },
     // opcode: 20
-    RoomPlayers {
-        id: u8,
-        amount: u8,
+    Left {
+        id: u8
     },
     // opcode: 21
     OwnerCode {
@@ -65,6 +64,7 @@ pub enum EventData {
     Message(String),
 }
 
+#[derive(Debug)]
 pub enum Command {
     JoinUser {
         addr: std::net::SocketAddr,
@@ -83,7 +83,7 @@ pub enum Command {
     },
     DeleteRoom {
         addr: std::net::SocketAddr,
-        id: u8,
+        id: usize,
     },
     ListRooms {
         addr: std::net::SocketAddr,
@@ -92,6 +92,9 @@ pub enum Command {
         addr: std::net::SocketAddr,
     },
     PlayAgain {
+        addr: std::net::SocketAddr,
+    },
+    LeaveRoom {
         addr: std::net::SocketAddr,
     }
 }

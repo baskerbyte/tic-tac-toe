@@ -16,7 +16,7 @@
     onMount(() => {
         setTimeout(function () {
             error_message = null;
-        }, 10000);
+        }, 5000);
     });
 
     ws.addEventListener("message", (event) => {
@@ -37,7 +37,6 @@
                 id = +my_turn;
                 match_result = null;
                 squares = Array(9).fill(null);
-                console.log(id);
 
                 break;
             case 14:
@@ -100,23 +99,20 @@
 <div>
     {#if !opponent_name}
         <p>Waiting for player...</p>
-    {:else if match_result}
-        <p>
-            {match_result === 1
-                ? id === 0
-                    ? `${opponent_name} won`
-                    : "You won"
-                : "Tie!"}
-        </p>
-
-        <button on:click={playAgain}>Play Again</button>
-        <button on:click={leaveRoom}>Leave Room</button>
+        <button class="cancell" on:click={leaveRoom}>Leave Room</button>
     {:else}
-        <p>{player_name} VS {opponent_name}</p>
+        <div class="display">
+            <p>{player_name} VS {opponent_name}</p>
+        </div>
 
-        <div class="board">
+        <div class="container">
             {#each squares as square, i}
-                <button on:click={() => handleSquareClick(i)}>
+                <button
+                    class="tile"
+                    on:click={() => handleSquareClick(i)}
+                    class:playerX={square === "X"}
+                    class:playerO={!(square === "X") && square != null}
+                >
                     {#if square === "X"}
                         X
                     {:else if square === "O"}
@@ -128,7 +124,29 @@
             {/each}
         </div>
 
-        <p>Your turn: <b>{my_turn}</b></p>
+        <div class="display">
+            {#if my_turn && !match_result}
+                <p>Your turn</p>
+            {:else if !my_turn && !match_result}
+                <p>{opponent_name} turn</p>{/if}
+        </div>
+
+        {#if match_result}
+            <p>
+                {#if (match_result === 1 && id === 1) || (match_result === 2 && id === 0)}
+                    <p>You won</p>
+                {:else if match_result === 3}
+                    <p>Tie!</p>
+                {:else}
+                    <p>{opponent_name} won</p>
+                {/if}
+            </p>
+
+            <button type="submit" on:click={playAgain} class="confirm"
+                >Play Again</button
+            >
+            <button class="cancell" on:click={leaveRoom}>Leave Room</button>
+        {/if}
     {/if}
 
     {#if error_message}
@@ -137,9 +155,60 @@
 </div>
 
 <style>
-    .board {
+    .container {
+        margin: 0 auto;
         display: grid;
-        grid-template-columns: repeat(3, 100px);
-        gap: 10px;
+        grid-template-columns: 33% 33% 33%;
+        grid-template-rows: 33% 33% 33%;
+        max-width: 300px;
+    }
+
+    .tile {
+        border: 1px solid white;
+        min-width: 100px;
+        min-height: 100px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 50px;
+        cursor: pointer;
+    }
+
+    .playerX {
+        color: #09c372;
+    }
+
+    .playerO {
+        color: #498afb;
+    }
+
+    .confirm {
+        background-color: #12181b;
+        color: white;
+        padding: 8px 20px;
+        font-size: 16px;
+        cursor: pointer;
+        border-radius: 5px;
+        border: 1px solid white;
+        margin-right: 10px;
+    }
+
+    .confirm:hover {
+        background-color: white;
+        color: #12181b;
+    }
+
+    .cancell {
+        background-color: #12181b;
+        color: #fff;
+        padding: 8px 20px;
+        font-size: 16px;
+        cursor: pointer;
+        border-radius: 5px;
+        border: 1px solid white;
+    }
+
+    .cancell:hover {
+        background-color: red;
     }
 </style>

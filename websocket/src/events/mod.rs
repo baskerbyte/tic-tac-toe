@@ -29,7 +29,7 @@ pub async fn handle(
                 data: event.d.unwrap(),
             },
         ),
-        (14, None) => send_message(&cmd_tx, Command::RemoveUser { addr: session.addr }),
+        (14, None) => send_message(&cmd_tx, Command::LeaveRoom { addr: session.addr }),
         (15, Some(EventData::CreateRoom { .. })) => send_message(
             &cmd_tx,
             Command::CreateRoom {
