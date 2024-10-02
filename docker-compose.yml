@@ -1,0 +1,13 @@
+services:
+    websocket:
+      build:
+        context: .
+        dockerfile: ./websocket/Dockerfile
+      network_mode: host
+    web:
+      build:
+        context: .
+        dockerfile: ./web/Dockerfile
+      network_mode: host
+      env_file:
+        - ./.env

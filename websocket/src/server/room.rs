@@ -48,7 +48,7 @@ impl Room {
         is_player1: bool,
         position: usize,
     ) -> Result<(), SocketRequest> {
-        if position < 0 || position > 9 {
+        if position < 0 || position > 8 {
             return Err(SocketRequest::new(
                 1007,
                 Some(EventData::Message("invalid position".to_string())),

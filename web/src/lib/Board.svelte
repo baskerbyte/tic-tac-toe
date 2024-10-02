@@ -32,6 +32,7 @@
                 match_result = data.d.status;
                 break;
             case 13:
+                console.log(data)
                 opponent_name = data.d.name;
                 my_turn = data.d.id == 1 ? false : true;
                 id = +my_turn;

@@ -2,6 +2,7 @@
     import { onMount, onDestroy  } from "svelte";
     import Board from "$lib/Board.svelte";
     import type { EventHandler } from "svelte/elements";
+    import { PUBLIC_WEBSOCKET_URL } from '$env/static/public';
 
     let ws: WebSocket | null = null;
 
@@ -17,7 +18,7 @@
 
     onMount(() => {
         ws = new WebSocket(
-            "wss://silver-enigma-x96r5pjpx9qh6px5-9002.app.github.dev/",
+            `wss://${PUBLIC_WEBSOCKET_URL}/`,
         );
 
         ws.addEventListener("message", function (event) {
@@ -203,7 +204,7 @@
                                     enter_code = [true, room.id];
                                 }
                             }}
-                            disabled={room.players_amount === 2 ? true : false}
+                            disabled={room.players_amount === 2}
                             type="submit"
                             class="confirm">Join</button
                         >
